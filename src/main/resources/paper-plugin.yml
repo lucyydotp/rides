@@ -1,0 +1,5 @@
+name: Rides
+description: abusing display entity interpolation to make smooth ride sequences
+version: 1.0.0-SNAPSHOT
+main: me.lucyydotp.rides.RidesPlugin
+api-version: "1.20"
