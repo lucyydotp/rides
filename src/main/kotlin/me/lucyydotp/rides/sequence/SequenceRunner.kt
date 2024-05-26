@@ -4,23 +4,35 @@ import io.papermc.paper.entity.TeleportFlag
 import me.lucyydotp.rides.util.Point
 import me.lucyydotp.rides.util.ceilDiv
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.Material
+import org.bukkit.craftbukkit.entity.CraftDisplay
+import org.bukkit.entity.BlockDisplay
 import org.bukkit.entity.Display
-import org.bukkit.entity.ItemDisplay
 import org.bukkit.entity.Player
-import org.bukkit.inventory.ItemStack
+import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.plugin.Plugin
 import org.bukkit.scheduler.BukkitTask
+import org.bukkit.util.Transformation
+import org.joml.Quaternionf
+import org.joml.Vector3f
 
 public abstract class SequenceRunner {
     protected abstract fun run(player: Player, ride: Display, sequence: RideSequence)
 
     public fun run(player: Player, sequence: RideSequence) {
-        val ride = player.world.spawn(sequence.first().first.asLocation(), ItemDisplay::class.java) {
+        val ride = player.world.spawn(sequence.first().first.asLocation(), BlockDisplay::class.java) {
             it.isPersistent = false
-            it.itemStack = ItemStack(Material.END_ROD)
+            it.block = Bukkit.createBlockData(Material.END_ROD)
+            it.brightness = Display.Brightness(15, 15)
             it.addPassenger(player)
+            it.transformation = Transformation(
+                Vector3f(-0.5f, -0.5f, -0.5f),
+                Quaternionf(),
+                Vector3f(1.0f, 1.0f, 1.0f),
+                Quaternionf()
+            )
         }
 
         this.run(player, ride, sequence)
@@ -88,9 +100,7 @@ public class TickingRunner(private val plugin: Plugin, private val interval: Int
 
     protected override fun run(player: Player, ride: Display, sequence: RideSequence) {
         val points = interpolate(sequence)
-
-        val lastTick = points.last().tick
-
+        val finalTick = points.last().let { it.tick + it.duration }
         val pointMap = points.associateBy { it.tick }
 
         var tick = 0
@@ -98,15 +108,20 @@ public class TickingRunner(private val plugin: Plugin, private val interval: Int
         lateinit var task: BukkitTask
         task = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
             pointMap[tick]?.let { (_, point, duration) ->
-                ride.teleportDuration = duration + 1
+
                 Bukkit.broadcast(Component.text("$tick: Teleporting to ${point.x}, ${point.y}, ${point.z} over $duration ticks"))
-                ride.teleport(
+                ride.teleportDuration = 0
+                ride.teleportDuration = duration
+                ride.teleportAsync(
                     point.asLocation(ride.world).add(0.5, 0.5, 0.5),
+                    PlayerTeleportEvent.TeleportCause.PLUGIN,
                     TeleportFlag.EntityState.RETAIN_PASSENGERS
                 )
+
+                (ride as CraftDisplay).handle
             }
-            if (tick == lastTick) {
-                Bukkit.broadcast(Component.text("Finished"))
+            if (tick == finalTick) {
+                Bukkit.broadcast(Component.text("$tick: Finished"))
                 ride.remove()
                 task.cancel()
             }
