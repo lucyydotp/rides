@@ -4,10 +4,10 @@ import io.papermc.paper.entity.TeleportFlag
 import me.lucyydotp.rides.util.Point
 import me.lucyydotp.rides.util.ceilDiv
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.craftbukkit.entity.CraftDisplay
+import org.bukkit.craftbukkit.entity.CraftEntity
 import org.bukkit.entity.BlockDisplay
 import org.bukkit.entity.Display
 import org.bukkit.entity.Player
@@ -61,7 +61,11 @@ public class SimpleRunner(private val plugin: Plugin) : SequenceRunner() {
     }
 }
 
-public class TickingRunner(private val plugin: Plugin, private val interval: Int = 1) : SequenceRunner() {
+public class TickingRunner(
+    private val plugin: Plugin,
+    private val interval: Int = 1,
+    private val extension: Int = 1,
+) : SequenceRunner() {
 
     private data class InterpolatedPoint(
         val tick: Int,
@@ -77,12 +81,12 @@ public class TickingRunner(private val plugin: Plugin, private val interval: Int
             val relativeTick = (i * interval).coerceAtMost(to.second)
             val tickIncrement = relativeTick - lastTickTime
 
-            val nextPoint = from.lerp(to.first, relativeTick / to.second.toDouble())
+            val nextPoint = from.lerp(to.first, (relativeTick + extension) / to.second.toDouble())
 
             this += InterpolatedPoint(
                 startTick + lastTickTime,
                 nextPoint,
-                tickIncrement
+                tickIncrement + extension
             )
             lastTickTime = relativeTick
         }
@@ -110,9 +114,12 @@ public class TickingRunner(private val plugin: Plugin, private val interval: Int
             pointMap[tick]?.let { (_, point, duration) ->
 
                 Bukkit.broadcast(Component.text("$tick: Teleporting to ${point.x}, ${point.y}, ${point.z} over $duration ticks"))
-                ride.teleportDuration = 0
                 ride.teleportDuration = duration
-                ride.teleportAsync(
+
+                // This cast always succeeds but smart casting was breaking the world property access below
+                (ride as? CraftEntity)?.let { it.handle.tracker?.serverEntity?.sendChanges() }
+
+                ride.teleport(
                     point.asLocation(ride.world).add(0.5, 0.5, 0.5),
                     PlayerTeleportEvent.TeleportCause.PLUGIN,
                     TeleportFlag.EntityState.RETAIN_PASSENGERS

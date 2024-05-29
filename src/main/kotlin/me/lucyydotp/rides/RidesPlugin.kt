@@ -40,7 +40,7 @@ public class RidesPlugin : JavaPlugin() {
         move(z = -8.0) over 100.ticks
     }
 
-    private val tickingRunner = TickingRunner(this, 15)
+    private val tickingRunner = TickingRunner(this, 1, 0)
 
 
     override fun onEnable() {
